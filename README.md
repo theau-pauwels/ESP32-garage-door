@@ -18,7 +18,7 @@ This project sets up an ESP32-based web server that allows users to remotely sen
 ## Installation
 1. Clone this repository:
    ```sh
-   git clone https://github.com/yourusername/esp32-pulse-control.git
+   git clone https://github.com/theau-pauwels/esp32-garage-door.git
 
 2. Open the project in the Arduino IDE.
 3. Install the following dependencies:
@@ -28,16 +28,16 @@ This project sets up an ESP32-based web server that allows users to remotely sen
   ```sh
    const char* ssid = "YOUR_WIFI_SSID";
    const char* password = "YOUR_WIFI_PASSWORD";
+  ````
 5. Upload the code to your ESP32.
 
 ## Usage
 1. Once powered on, the ESP32 connects to Wi-Fi and prints its IP address to the Serial Monitor. (for debugging purpose). You better set up a static IP through your router.
 2. Open a web browser and enter the displayed IP address.
 3. Use the web interface to send pulses to GPIO pins 22 and 23.
-4. Go to the IP of your ESP32 to send the impulse. (Alternatively, make a GET request to **/pulse** to trigger an impulse:
+4. Go to the IP of your ESP32 to send the impulse. Alternatively, make a GET request to **/pulse** to trigger an impulse:
    ```sh
    curl http://<ESP32_IP>/pulse
-)
 
 ## Code Breakdown
 - Wi-Fi Setup: The ESP32 connects to the specified Wi-Fi network and retries on failure.
