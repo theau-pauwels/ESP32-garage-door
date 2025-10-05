@@ -2,28 +2,28 @@
 #include <ESPAsyncWebServer.h>
 
 // ================== CONFIGURATION ==================
-#define RELAY_PIN 23           // IN1 du module relais
-#define RELAY_ACTIVE_LOW 1     // 1 si le relais s'active avec un niveau bas
-const unsigned long PULSE_MS = 700;   // Durée de l'impulsion en ms
+#define RELAY_PIN 23            // Connected to IN1 on the relay module
+#define RELAY_ACTIVE_LOW 1      // 1 if the relay is triggered by a LOW signal
+const unsigned long PULSE_MS = 700;   // Pulse duration in milliseconds
 
 const char* ssid     = "WiFi_SSID";
 const char* password = "WiFi_Password";
 
 AsyncWebServer server(80);
 
-// État d'impulsion non bloquante
+// Non-blocking pulse state
 bool pulseActive = false;
 unsigned long pulseEnd = 0;
 
-// ================== RELAIS ==================
+// ================== RELAY CONTROL ==================
 inline void setIdle() {
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? HIGH : LOW);
+  digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? HIGH : LOW);  // Relay OFF
 }
 
 inline void setOn() {
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? LOW : HIGH);
+  digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? LOW : HIGH);  // Relay ON
 }
 
 void startPulse() {
@@ -44,43 +44,46 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  // Repos par défaut
+  // Default state: relay off
   pinMode(RELAY_PIN, INPUT_PULLUP);
   setIdle();
 
-  // --- Connexion Wi-Fi ---
+  // --- Wi-Fi connection ---
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.persistent(false);
   WiFi.begin(ssid, password);
   WiFi.setAutoReconnect(true);
 
-  Serial.print("[WiFi] Connexion à "); Serial.println(ssid);
+  Serial.print("[WiFi] Connecting to "); Serial.println(ssid);
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 60000) {
     delay(250); Serial.print('.');
   }
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("\n[WiFi] Échec, redémarrage...");
+    Serial.println("\n[WiFi] Connection failed, restarting...");
     ESP.restart();
   }
-  Serial.print("\n[WiFi] IP: "); Serial.println(WiFi.localIP());
+  Serial.print("\n[WiFi] Connected. IP address: "); Serial.println(WiFi.localIP());
 
-  // --- Serveur Web ---
+  // --- Web Server ---
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *r) {
     r->send(200, "text/html", R"rawliteral(
       <!DOCTYPE html>
       <html>
-      <head><meta charset="utf-8"/><title>Garage</title>
-      <script>
-        async function sendPulse(){
-          const r = await fetch('/pulse');
-          alert(await r.text());
-        }
-      </script></head>
+      <head>
+        <meta charset="utf-8"/>
+        <title>Garage Control</title>
+        <script>
+          async function sendPulse() {
+            const r = await fetch('/pulse');
+            alert(await r.text());
+          }
+        </script>
+      </head>
       <body style="font-family:sans-serif;text-align:center;margin-top:2em">
-        <h1>Contrôle de la porte de garage</h1>
-        <button onclick="sendPulse()" style="font-size:2em;padding:1em 2em;">Ouvrir / Fermer</button>
+        <h1>Garage Door Control</h1>
+        <button onclick="sendPulse()" style="font-size:2em;padding:1em 2em;">Open / Close</button>
       </body>
       </html>
     )rawliteral");
@@ -88,15 +91,15 @@ void setup() {
 
   server.on("/pulse", HTTP_GET, [](AsyncWebServerRequest *r) {
     startPulse();
-    r->send(200, "text/plain", "Impulsion envoyée");
+    r->send(200, "text/plain", "Pulse sent");
   });
 
   server.begin();
-  Serial.println("[HTTP] Serveur démarré");
+  Serial.println("[HTTP] Server started");
 }
 
 // ================== LOOP ==================
 void loop() {
-  servicePulse();
+  servicePulse();   // Check if the pulse duration has ended
   delay(1);
 }
