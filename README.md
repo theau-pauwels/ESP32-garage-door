@@ -1,55 +1,99 @@
-# ESP32 Differential Pulse Web Controller
+# ESP32 Garage Door Controller
 
-## Overview
-This project sets up an ESP32-based web server that allows users to remotely send differential pulses via a web interface. The ESP32 connects to a Wi-Fi network and provides an HTML interface where users can trigger pulses on GPIO pins 22 and 23.
+This project allows you to control a **garage door** using an **ESP32** and a **5V relay module** through a simple web interface.  
+When connected to Wi-Fi, you can open or close the door by visiting a local web page or triggering an HTTP request.
 
-## Features
-- Wi-Fi connectivity for remote control
-- Web-based interface to send pulses
-- Simple GET request endpoint (`/pulse`) to trigger pulses programmatically
-- Auto-reconnect mechanism in case of connection failure
+---
 
-## Hardware Requirements
-- ESP32 development board
-- Wi-Fi network
-- A relay to connect to your garage door motor
-- (Optional) LED or oscilloscope to monitor pulse output
+## 🔧 Hardware Overview
 
-## Installation
-1. Clone this repository:
-   ```sh
-   git clone https://github.com/theau-pauwels/esp32-garage-door.git
+### Required components
+- 1 × ESP32 DevKit (WROOM-32)
+- 1 × 1 or 2-channel relay module (5V type, JD-VCC/VCC jumper ON)
+- Basic jumper wires
+- Your garage door’s **manual wall-switch input** (dry contact)
 
-2. Open the project in the Arduino IDE.
-3. Install the following dependencies:
-- **WiFi.h** (included with ESP32 core for Arduino)
-- **ESPAsyncWebServer.h** (install via Arduino Library Manager)
-4. Update your Wi-Fi credentials in the code:
-  ```sh
-   const char* ssid = "YOUR_WIFI_SSID";
-   const char* password = "YOUR_WIFI_PASSWORD";
-  ````
-5. Upload the code to your ESP32.
+### Wiring Diagram (simplified)
 
-## Usage
-1. Once powered on, the ESP32 connects to Wi-Fi and prints its IP address to the Serial Monitor. (for debugging purpose). You better set up a static IP through your router.
-2. Open a web browser and enter the displayed IP address.
-3. Use the web interface to send pulses to GPIO pins 22 and 23.
-4. Go to the IP of your ESP32 to send the impulse. Alternatively, make a GET request to **/pulse** to trigger an impulse:
-   ```sh
-   curl http://<ESP32_IP>/pulse
+```
+      +--------------------+
+      |      ESP32         |
+      |                    |
+      |   VIN (5V)  ------> JD-VCC / VCC (relay)
+      |   GND       ------> GND (relay)
+      |   GPIO 23   ------> IN1 (relay)
+      |                    |
+      +--------------------+
 
-## Code Breakdown
-- Wi-Fi Setup: The ESP32 connects to the specified Wi-Fi network and retries on failure.
-- Web Server:
-   - **/** serves an HTML page with a button to trigger pulses.
-   - **/pulse** sends a 500ms high pulse to GPIO 22 and 23.
-- Differential Pulse: A function toggles the GPIO pins to generate an impulse.
+          RELAY MODULE (1CH or 2CH)
+             COM ----> one wire to door control
+             NO  ----> other wire to door control
+```
 
-## Future Improvements
-- Add configurable pulse duration
-- Implement authentication for secure access
-- Expand control options for multiple GPIOs
+> The relay acts as a **momentary push button** between COM and NO.
 
-## License
-This project is licensed under the MIT License. Feel free to modify and use it!
+---
+
+## ⚙️ Software Logic
+
+### Behavior
+- The ESP32 hosts a small web server on port **80**.
+- Visiting the ESP32’s IP (e.g., `http://10.10.10.94/`) shows a **simple HTML page** with one button.
+- Clicking the button triggers a **700 ms non-blocking pulse** on GPIO 23, simulating a short button press.
+
+### Features
+- Non-blocking timing (Wi-Fi stays responsive)
+- Auto-reconnects to Wi-Fi on disconnect
+- Clean HTML UI (mobile-friendly)
+
+---
+
+## 🧠 Code Overview
+
+| Section | Purpose |
+|----------|----------|
+| **Wi-Fi setup** | Connects to your local network with auto-reconnect. |
+| **Relay control** | Handles HIGH/LOW logic for active-LOW relay modules. |
+| **Non-blocking pulse** | Uses `millis()` to time the 700 ms activation. |
+| **Web server** | Serves a minimal HTML interface and listens for `/pulse` requests. |
+
+---
+
+## 🪛 Configuration
+
+In the code, update your Wi-Fi credentials:
+
+```cpp
+const char* ssid = "Your_SSID";
+const char* password = "Your_Password";
+```
+
+You can adjust pulse duration if needed:
+
+```cpp
+const unsigned long PULSE_MS = 700; // milliseconds
+```
+
+---
+
+## 🧩 Usage
+
+1. Upload the code to your ESP32 using the Arduino IDE.
+2. Open the serial monitor to find the **assigned IP address**.
+3. Visit that address in your browser (e.g., `http://10.10.10.94/`).
+4. Click **Open / Close** to toggle your garage door.
+
+---
+
+## ⚠️ Notes
+
+- The relay is powered from **VIN (5V)** — make sure your ESP32 is powered via USB or a 5V supply.
+- JD-VCC/VCC jumper must remain **installed**.
+- The relay contact (COM + NO) should connect only to the **door trigger input** (dry contact).
+
+---
+
+## 🧾 License
+
+This project is released under the MIT License.  
+Feel free to modify and use it for personal or educational purposes.
