@@ -1,99 +1,102 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 
-// Définir les broches utilisées
-#define PIN_D22 22
-#define PIN_D23 23
+// ================== CONFIGURATION ==================
+#define RELAY_PIN 23           // IN1 du module relais
+#define RELAY_ACTIVE_LOW 1     // 1 si le relais s'active avec un niveau bas
+const unsigned long PULSE_MS = 700;   // Durée de l'impulsion en ms
 
-// Informations Wi-Fi
-const char* ssid = "WIFI_SSID";
-const char* password = "WIFI_PASSWORD";
+const char* ssid     = "WiFi_SSID";
+const char* password = "WiFi_Password";
 
-// Créer un serveur web
 AsyncWebServer server(80);
 
-// Fonction pour générer une impulsion différentielle
-void sendDifferentialPulse() {
-  digitalWrite(PIN_D22, HIGH);
-  digitalWrite(PIN_D23, HIGH);
-  delay(500);  // Durée de l'impulsion (ajustez selon vos besoins)
-  digitalWrite(PIN_D22, LOW);
-  digitalWrite(PIN_D23, LOW);
+// État d'impulsion non bloquante
+bool pulseActive = false;
+unsigned long pulseEnd = 0;
+
+// ================== RELAIS ==================
+inline void setIdle() {
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? HIGH : LOW);
 }
 
+inline void setOn() {
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? LOW : HIGH);
+}
+
+void startPulse() {
+  setOn();
+  pulseActive = true;
+  pulseEnd = millis() + PULSE_MS;
+}
+
+void servicePulse() {
+  if (pulseActive && millis() >= pulseEnd) {
+    setIdle();
+    pulseActive = false;
+  }
+}
+
+// ================== SETUP ==================
 void setup() {
   Serial.begin(115200);
-  while (!Serial); // Attendre que la connecion série soit up
+  delay(100);
 
-  // Initialiser les broches
-  pinMode(PIN_D22, OUTPUT);
-  pinMode(PIN_D23, OUTPUT);
+  // Repos par défaut
+  pinMode(RELAY_PIN, INPUT_PULLUP);
+  setIdle();
 
-  // Initialiser les broches à LOW
-  digitalWrite(PIN_D22, LOW);
-  digitalWrite(PIN_D23, LOW);
-
-///// WiFi Setup
-  // Connexion au réseau WiFi
+  // --- Connexion Wi-Fi ---
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.persistent(false);
   WiFi.begin(ssid, password);
-  int trial = 0;
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-    trial = trial + 1;
-    if (trial == 120){
-      ESP.restart();
-    }
+  WiFi.setAutoReconnect(true);
+
+  Serial.print("[WiFi] Connexion à "); Serial.println(ssid);
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 60000) {
+    delay(250); Serial.print('.');
   }
-  Serial.println("\n");
-  Serial.println("Connecté à l'adresse: ");
-  Serial.println(WiFi.localIP());
-///// End WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\n[WiFi] Échec, redémarrage...");
+    ESP.restart();
+  }
+  Serial.print("\n[WiFi] IP: "); Serial.println(WiFi.localIP());
 
-  // Démarrer le serveur
-  server.begin();
-
-  // Configurer le serveur pour gérer une requête d'impulsion
-  //server.on("/pulse", HTTP_GET, [](AsyncWebServerRequest *request) {
-  //  sendDifferentialPulse();
-  //  request->send(200, "text/plain", "Impulse sent!");
-  //});
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/html", R"rawliteral(
+  // --- Serveur Web ---
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *r) {
+    r->send(200, "text/html", R"rawliteral(
       <!DOCTYPE html>
       <html>
-      <head>
-        <title>Contrôle ESP32</title>
-        <script>
-          function sendPulse() {
-            fetch('/pulse')
-              .then(response => {
-                if (!response.ok) throw new Error("Erreur lors de l'envoi !");
-                return response.text();
-              })
-              .then(alert)
-              .catch(err => alert("Erreur : " + err.message));
-          }
-        </script>
-      </head>
-      <body>
-        <h1>Contrôle des impulsions</h1>
-        <button onclick="sendPulse()">Envoyer une impulsion</button>
+      <head><meta charset="utf-8"/><title>Garage</title>
+      <script>
+        async function sendPulse(){
+          const r = await fetch('/pulse');
+          alert(await r.text());
+        }
+      </script></head>
+      <body style="font-family:sans-serif;text-align:center;margin-top:2em">
+        <h1>Contrôle de la porte de garage</h1>
+        <button onclick="sendPulse()" style="font-size:2em;padding:1em 2em;">Ouvrir / Fermer</button>
       </body>
       </html>
     )rawliteral");
   });
-    server.on("/pulse", HTTP_GET, [](AsyncWebServerRequest *request) {
-    digitalWrite(22, HIGH);
-    digitalWrite(23, HIGH);
-    delay(500);  // Durée de l'impulsion
-    digitalWrite(22, LOW);
-    digitalWrite(23, LOW);
 
-    request->send(200, "text/plain", "Impulsion envoyée !");
+  server.on("/pulse", HTTP_GET, [](AsyncWebServerRequest *r) {
+    startPulse();
+    r->send(200, "text/plain", "Impulsion envoyée");
   });
+
+  server.begin();
+  Serial.println("[HTTP] Serveur démarré");
 }
 
+// ================== LOOP ==================
 void loop() {
-  // Rien à faire dans la boucle principale
+  servicePulse();
+  delay(1);
 }
