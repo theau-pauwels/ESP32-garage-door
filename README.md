@@ -44,6 +44,11 @@ When connected to Wi-Fi, you can open or close the door by visiting a local web 
 ### Features
 - Non-blocking timing (Wi-Fi stays responsive)
 - Auto-reconnects to Wi-Fi on disconnect
+- Local hostname: `http://garage-thulin.local`
+- Password-protected web interface and `POST /pulse`
+- Password-protected `Garage-Thulin-Setup` access point if the saved Wi-Fi is unavailable
+- Wi-Fi credentials stored in ESP32 non-volatile memory
+- Authenticated Arduino OTA firmware updates over the local network
 - Clean HTML UI (mobile-friendly)
 
 ---
@@ -61,18 +66,56 @@ When connected to Wi-Fi, you can open or close the door by visiting a local web 
 
 ## 🪛 Configuration
 
-In the code, update your Wi-Fi credentials:
+Before the first flash, change the placeholder secrets in `garage-door.ino`:
 
 ```cpp
-const char* ssid = "Your_SSID";
-const char* password = "Your_Password";
+const char* SETUP_AP_PASSWORD = "CHANGE-ME-SETUP-PASSWORD";
+const char* WEB_USERNAME = "garage";
+const char* WEB_PASSWORD = "CHANGE-ME-WEB-PASSWORD";
+const char* OTA_PASSWORD = "CHANGE-ME-OTA-PASSWORD";
 ```
 
-You can adjust pulse duration if needed:
+Use three different strong passwords. **Do not commit real passwords to this public repository.**
+
+The compiled-in Wi-Fi credentials are optional. Leaving `DEFAULT_SSID` at its placeholder value makes the ESP32 start the protected setup AP when no stored Wi-Fi works.
+
+You can adjust the relay pulse duration if needed:
 
 ```cpp
-const unsigned long PULSE_MS = 700; // milliseconds
+const unsigned long PULSE_MS = 700;
 ```
+
+---
+
+## 🧩 First setup
+
+1. Flash the ESP32 once over USB with Arduino IDE.
+2. If no configured Wi-Fi is available, wait about 30 seconds for `Garage-Thulin-Setup`.
+3. Join that network using `SETUP_AP_PASSWORD`.
+4. Browse to `http://192.168.4.1`, enter the home Wi-Fi credentials, and save.
+5. Reconnect your device to the home network.
+6. Open `http://garage-thulin.local` and authenticate with `WEB_USERNAME` / `WEB_PASSWORD`.
+
+---
+
+## 📡 Wireless firmware updates (Arduino OTA)
+
+OTA is available only while the ESP32 is connected to the normal home Wi-Fi. It is not started on the `Garage-Thulin-Setup` access point.
+
+After the first USB flash:
+
+1. Connect the Ubuntu notebook to the same LAN as the ESP32.
+2. Open Arduino IDE and wait for the network port for `garage-thulin` to appear under **Tools → Port**.
+3. Select that network port.
+4. Click **Upload**.
+5. Enter `OTA_PASSWORD` when Arduino IDE asks for the OTA password.
+6. The firmware is transferred over Wi-Fi and the ESP32 reboots automatically.
+
+During an OTA update, the code forces the relay OFF before writing the firmware.
+
+If Arduino IDE does not discover the network port, verify that the notebook and ESP32 are on the same LAN and that multicast/mDNS traffic is not isolated by the router. The ESP32 remains reachable at `garage-thulin.local` when mDNS is working.
+
+A USB connection remains the recovery method if an OTA update installs firmware that can no longer connect to Wi-Fi or start OTA.
 
 ---
 
