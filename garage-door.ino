@@ -2,6 +2,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
+#include <ArduinoOTA.h>
 
 // ================== CONFIGURATION ==================
 #define RELAY_PIN 23
@@ -26,6 +27,10 @@ const char* SETUP_AP_PASSWORD = "CHANGE-ME-SETUP-PASSWORD";
 // Credentials protecting the normal garage web interface and /pulse endpoint.
 const char* WEB_USERNAME = "garage";
 const char* WEB_PASSWORD = "CHANGE-ME-WEB-PASSWORD";
+
+// Password used only for wireless firmware updates (Arduino OTA).
+// Keep it different from the web and setup passwords.
+const char* OTA_PASSWORD = "CHANGE-ME-OTA-PASSWORD";
 
 AsyncWebServer server(80);
 Preferences preferences;
@@ -99,6 +104,44 @@ void startMDNS() {
 
   MDNS.addService("http", "tcp", 80);
   Serial.print("[mDNS] Available at http://");
+  Serial.print(HOSTNAME);
+  Serial.println(".local");
+}
+
+// ================== OTA UPDATES ==================
+void startOTA() {
+  ArduinoOTA.setHostname(HOSTNAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+
+  ArduinoOTA.onStart([]() {
+    // Never leave the relay energized while replacing the firmware.
+    setIdle();
+    pulseActive = false;
+    Serial.println("[OTA] Update started. Relay forced OFF.");
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] Update complete. Rebooting...");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    unsigned int percent = total ? (progress * 100U) / total : 0;
+    Serial.printf("[OTA] Progress: %u%%\r", percent);
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("\n[OTA] Error %u: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("authentication failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("begin failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("connection failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("receive failed");
+    else if (error == OTA_END_ERROR) Serial.println("end failed");
+    else Serial.println("unknown error");
+  });
+
+  ArduinoOTA.begin();
+
+  Serial.print("[OTA] Ready as ");
   Serial.print(HOSTNAME);
   Serial.println(".local");
 }
@@ -304,6 +347,7 @@ void setup() {
 
   if (connected) {
     startMDNS();
+    startOTA();
     startNormalServer();
   } else {
     startSetupMode();
@@ -312,6 +356,11 @@ void setup() {
 
 // ================== LOOP ==================
 void loop() {
+  // OTA is only started in normal station mode, never on the setup AP.
+  if (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED) {
+    ArduinoOTA.handle();
+  }
+
   servicePulse();
   delay(1);
 }
