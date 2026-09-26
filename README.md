@@ -100,22 +100,73 @@ const unsigned long PULSE_MS = 700;
 
 ## 📡 Wireless firmware updates (Arduino OTA)
 
-OTA is available only while the ESP32 is connected to the normal home Wi-Fi. It is not started on the `Garage-Thulin-Setup` access point.
+After the **first USB flash**, normal firmware updates can be installed over Wi-Fi without physically accessing the ESP32.
 
-After the first USB flash:
+### Requirements
 
-1. Connect the Ubuntu notebook to the same LAN as the ESP32.
-2. Open Arduino IDE and wait for the network port for `garage-thulin` to appear under **Tools → Port**.
-3. Select that network port.
-4. Click **Upload**.
-5. Enter `OTA_PASSWORD` when Arduino IDE asks for the OTA password.
-6. The firmware is transferred over Wi-Fi and the ESP32 reboots automatically.
+- The ESP32 must already be connected to the normal home Wi-Fi.
+- The computer running Arduino IDE must be on the same local network.
+- `OTA_PASSWORD` in the firmware must match the password used for the upload.
+- OTA is deliberately **not available** while the ESP32 is running the `Garage-Thulin-Setup` access point.
 
-During an OTA update, the code forces the relay OFF before writing the firmware.
+### Update from Arduino IDE
 
-If Arduino IDE does not discover the network port, verify that the notebook and ESP32 are on the same LAN and that multicast/mDNS traffic is not isolated by the router. The ESP32 remains reachable at `garage-thulin.local` when mDNS is working.
+1. Make the required changes to `garage-door.ino`.
+2. Click **Verify** first and make sure compilation succeeds.
+3. Keep the computer connected to the same LAN as the ESP32.
+4. In Arduino IDE, open **Tools → Port**.
+5. Wait for the network port named `garage-thulin` / `garage-thulin.local` to appear.
+6. Select this **network port** instead of the USB serial port.
+7. Click **Upload**.
+8. Enter the value configured in `OTA_PASSWORD` when Arduino IDE requests the OTA password.
+9. Wait until the upload reaches 100%. Do not power off the ESP32 or router during the update.
+10. The ESP32 automatically reboots into the new firmware.
 
-A USB connection remains the recovery method if an OTA update installs firmware that can no longer connect to Wi-Fi or start OTA.
+The web interface will be temporarily unavailable during the update and reboot.
+
+### Safety during an OTA update
+
+When an OTA update starts, the firmware:
+
+- immediately forces the relay to its idle/OFF state;
+- cancels any active relay pulse;
+- writes the new firmware;
+- reboots after a successful update.
+
+This prevents the relay from intentionally remaining energized while the firmware is being replaced. As with any embedded controller connected to a garage door, keep the physical installation fail-safe and do not rely on OTA software as the only safety mechanism.
+
+### Verify the update
+
+The Serial Monitor is normally unavailable when the ESP32 is not connected by USB. After the update, verify that:
+
+- `http://garage-thulin.local` responds again;
+- the web authentication still works;
+- the garage command works as expected.
+
+If the ESP32 is temporarily connected by USB, the serial output at **115200 baud** also reports OTA start, progress, errors and the subsequent boot.
+
+### If the network port does not appear
+
+First check that `http://garage-thulin.local` is reachable from the computer. If it is, but Arduino IDE does not show the OTA port:
+
+1. wait a few seconds and reopen **Tools → Port**;
+2. confirm the computer and ESP32 are on the same LAN/VLAN;
+3. check that the router/access point is not using client/AP isolation;
+4. check that multicast/mDNS traffic is allowed on the local network;
+5. restart Arduino IDE if discovery still does not refresh.
+
+mDNS is used for discovery, so a network that blocks multicast can prevent the Arduino IDE from automatically finding the ESP32 even when ordinary IP connectivity works.
+
+### Recovery
+
+**USB remains the recovery method.** Use a USB flash again if, for example:
+
+- the new firmware no longer connects to Wi-Fi;
+- OTA initialization is broken;
+- the Wi-Fi configuration has been lost and cannot be restored through the setup AP;
+- an incompatible firmware was installed.
+
+For that reason, always run **Verify** before starting an OTA upload.
 
 ---
 
